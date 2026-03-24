@@ -1,5 +1,5 @@
 """
-Console Reporter — вывод результатов в терминал с цветами.
+Console Reporter — вывод результатов в терминал.
 """
 
 from pathlib import Path
@@ -46,7 +46,7 @@ class ConsoleReporter(ReporterMixin):
         """Панель с найденными уязвимостями."""
         output_lines = []
 
-        for finding in result.findings:
+        for i, finding in enumerate(result.findings):
             # Цвет в зависимости от риска
             if finding.risk_level == RiskLevel.CRITICAL:
                 color = "red"
@@ -57,22 +57,21 @@ class ConsoleReporter(ReporterMixin):
             else:
                 color = "blue"
 
-            # Формирование информации
             info = [
-                f"[{color}] {finding.secret_type}[/bold {color}]",
-                f"  File: [cyan]{finding.file}[/cyan]",
-                f"  Value: [red]{finding.redacted_value}[/red]",
-                f"  Risk Score: [{color}]{finding.risk_score:.1f}[/bold {color}] ({finding.risk_level.value})",
-                f"  CI System: {finding.context.ci_system}",
-                f"  Stage: {finding.context.stage or 'N/A'}",
-                f"  Environment: {finding.context.environment or 'N/A'}",
-                f"  Job: {finding.context.job_name or 'N/A'}",
-                f"  Hardcoded: {'[red]Yes[/red]' if finding.is_hardcoded else '[green]No[/green]'}",
+                f"[{color} bold] {finding.secret_type}[/{color} bold]",
+                f"[cyan]File:[/cyan] {finding.file}",
+                f"[cyan]Value:[/cyan] [{color}]{finding.redacted_value}[/{color}]",
+                f"[cyan]Risk Score:[/cyan] [{color} bold]{finding.risk_score:.1f}[/bold {color}] ({finding.risk_level.value})",
+                f"[cyan]CI System:[/cyan] {finding.context.ci_system}",
+                f"[cyan]Stage:[/cyan] {finding.context.stage or 'N/A'}",
+                f"[cyan]Environment:[/cyan] {finding.context.environment or 'N/A'}",
+                f"[cyan]Job:[/cyan] {finding.context.job_name or 'N/A'}",
+                f"[cyan]Hardcoded:[/cyan] [{'red' if finding.is_hardcoded else 'green'}]{'Yes' if finding.is_hardcoded else 'No'}[/{'red' if finding.is_hardcoded else 'green'}]",
             ]
 
             panel = Panel(
                 "\n".join(info),
-                title=f"Finding #{result.findings.index(finding) + 1}",
+                title=f"Finding #{i + 1}",
                 border_style=color,
                 padding=(1, 2)
             )

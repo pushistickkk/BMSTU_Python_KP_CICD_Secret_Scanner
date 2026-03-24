@@ -1,10 +1,8 @@
 """
 Models for secret scanning.
-Use dataclasses and pydantic for validation.
 ******
 
 Модели данных для сканера секретов.
-Используют dataclasses и pydantic для валидации.
 """
 
 from dataclasses import dataclass, field
@@ -14,7 +12,7 @@ from enum import Enum
 from pathlib import Path
 
 
-class RiskLevel(Enum): # ensures that the risk can only be one of 4 values
+class RiskLevel(Enum):
     """
         Security risk level.
         ****
