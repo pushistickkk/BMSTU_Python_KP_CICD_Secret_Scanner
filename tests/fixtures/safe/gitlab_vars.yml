@@ -1,0 +1,17 @@
+# .gitlab-ci.yml
+# ТЕСТОВЫЙ ФАЙЛ — безопасные переменные (не должен находить секреты)
+
+stages:
+  - build
+  - deploy
+
+variables:
+  AWS_ACCESS_KEY_ID: $AWS_ACCESS_KEY_ID
+  AWS_SECRET_ACCESS_KEY: $AWS_SECRET_ACCESS_KEY
+  DATABASE_URL: $DATABASE_URL
+
+deploy:
+  stage: deploy
+  environment: production
+  script:
+    - aws s3 sync ./dist s3://my-bucket/

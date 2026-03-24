@@ -1,0 +1,22 @@
+# .gitlab-ci.yml
+# ТЕСТОВЫЙ ФАЙЛ — содержит уязвимости для проверки сканера - дубликат для тестрования автоопределения системы сборки
+
+stages:
+  - build
+  - deploy
+
+variables:
+  AWS_ACCESS_KEY_ID: "AKIAIOSFODNN7EXAMPLE"
+  AWS_SECRET_ACCESS_KEY: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+  AWS_DEFAULT_REGION: "us-east-1"
+
+build:
+  stage: build
+  script:
+    - echo "Building..."
+
+deploy_prod:
+  stage: deploy
+  environment: production
+  script:
+    - aws s3 sync ./dist s3://my-bucket/
