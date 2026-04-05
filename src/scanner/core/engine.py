@@ -5,13 +5,20 @@ Scanner Engine — оркестратор пайплайна сканирова�
 import time
 from pathlib import Path
 from typing import List
-from scanner.core.models import ScanResult
-from scanner.parsers.gitlab import GitLabParser
-from scanner.detectors.regex import RegexDetector
 
-from scanner.parsers.github import GitHubParser
-from scanner.detectors.contextual import ContextualDetector
+from scanner.core.models import ScanResult
 from scanner.core.risk_scorer import ContextAwareRiskScorer
+from scanner.core.risk_scorer import ContextAwareRiskScorer
+
+# Парсеры
+from scanner.parsers.gitlab import GitLabParser
+from scanner.parsers.github import GitHubParser
+# Детекторы
+from scanner.detectors.regex import RegexDetector
+from scanner.detectors.entropy import EntropyDetector
+from scanner.detectors.contextual import ContextualDetector
+# Валидаторы
+from scanner.validators.format import FormatValidatorManager
 
 
 class ScannerEngine:
@@ -83,6 +90,19 @@ class ScannerEngine:
             for detector in sorted(self.detectors, key=lambda d: d.get_priority()):
                 findings = detector.detect(config, all_values)
                 all_findings.extend(findings)
+
+            unique_findings = []
+            seen_values = set()
+            
+            for finding in all_findings:
+                # Создаём ключ для дедупликации
+                key = f"{finding.file}:{finding.value}"
+                
+                if key not in seen_values:
+                    seen_values.add(key)
+                    unique_findings.append(finding)
+            
+            all_findings = unique_findings
             
             # Контекст
             enhanced_findings = self.contextual_detector.apply_context(all_findings)
