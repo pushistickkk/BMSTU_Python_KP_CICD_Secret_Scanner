@@ -1,0 +1,26 @@
+# cicd-scanner scan tests/fixtures/vulnerable/github_workflow.yml --format text
+name: Deploy Pipeline
+
+on: push
+
+env:
+  AWS_SECRET_ACCESS_KEY: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+  STRIPE_KEY: "sk_live_51HxYz2EZZZZZZZZZZZZZZZZZZZZ"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build
+        run: npm run build
+
+  deploy-production:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy
+        run: echo "Deploying to production"
+        env:
+          AWS_ACCESS_KEY_ID: "AKIAIOSFODNN7EXAMPLE"
+          GITHUB_TOKEN: "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"

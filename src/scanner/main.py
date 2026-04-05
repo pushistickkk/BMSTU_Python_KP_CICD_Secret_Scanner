@@ -68,7 +68,7 @@ def scan(path, format, output, risk_threshold, fail_on):
     path = Path(path)
 
     console.print(Panel.fit(
-        f"🔍 Scanning: [bold cyan]{path}[/bold cyan]",
+        f"Scanning: [bold cyan]{path}[/bold cyan]",
         title="CI/CD Secret Scanner",
         border_style="blue"
     ))

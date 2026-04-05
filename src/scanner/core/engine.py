@@ -9,6 +9,10 @@ from scanner.core.models import ScanResult
 from scanner.parsers.gitlab import GitLabParser
 from scanner.detectors.regex import RegexDetector
 
+from scanner.parsers.github import GitHubParser
+from scanner.detectors.contextual import ContextualDetector
+from scanner.core.risk_scorer import ContextAwareRiskScorer
+
 
 class ScannerEngine:
     """
@@ -20,10 +24,13 @@ class ScannerEngine:
     def __init__(self):
         self.parsers = {
             'gitlab': GitLabParser(),
+            'github': GitHubParser(),
         }
         self.detectors = [
             RegexDetector(),
         ]
+        self.contextual_detector = ContextualDetector()
+        self.scorer = ContextAwareRiskScorer()
 
     def _detect_ci_system(self, file_path: Path) -> str:
         """
@@ -39,8 +46,8 @@ class ScannerEngine:
 
         if 'gitlab-ci' in path_lower or path_lower.endswith('.gitlab-ci.yml'):
             return 'gitlab'
-        # elif '.github' in str(file_path) or 'github' in path_lower:
-        #     return 'github'
+        elif '.github' in str(file_path) or 'github' in path_lower:
+            return 'github'
         # elif 'jenkinsfile' in path_lower:
         #     return 'jenkins'
         else:
@@ -73,11 +80,13 @@ class ScannerEngine:
             for detector in sorted(self.detectors, key=lambda d: d.get_priority()):
                 findings = detector.detect(config, all_values)
                 all_findings.extend(findings)
+            
+            enhanced_findings = self.contextual_detector.apply_context(all_findings)
 
             duration = (time.time() - start) * 1000
 
             return ScanResult(
-                findings=all_findings,
+                findings=enhanced_findings,
                 files_scanned=1,
                 scan_duration_ms=duration,
                 ci_systems_detected=[ci_system],
