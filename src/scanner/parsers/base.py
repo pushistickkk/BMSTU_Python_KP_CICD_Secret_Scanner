@@ -13,7 +13,7 @@ class ParserMixin(BaseParser):
         Извлекать значения с контекстом: {stage: "deploy", job: "prod", section: "variables"}
     """
 
-    def get_type(self) -> str:
+    def get_type(self):
         """Должен быть переопределён в наследниках."""
         raise NotImplementedError
 

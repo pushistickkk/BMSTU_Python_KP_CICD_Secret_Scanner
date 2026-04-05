@@ -1,6 +1,5 @@
 """
 CLI интерфейс для CI/CD Secret Scanner.
-Использует click для парсинга аргументов командной строки.
 """
 
 import click
@@ -23,7 +22,7 @@ console = Console()
 def cli():
     """
     CI/CD Secret Scanner — контекстный сканер секретов для конфигураций CI/CD.
-    Поддерживает GitLab CI.
+    Поддерживает конфиги GitLab CI (пока что).
     """
     pass
 
@@ -58,6 +57,8 @@ def cli():
     default='none',
     help='Код возврата при обнаружении уязвимостей'
 )
+
+
 def scan(path, format, output, risk_threshold, fail_on):
     """
     Сканировать файл или директорию на наличие секретов.

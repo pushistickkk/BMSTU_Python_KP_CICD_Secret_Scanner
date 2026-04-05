@@ -38,3 +38,6 @@ json пока не создает файлы, только в консоль в�
 № строки в файлах добавить в вывод и в принципе спарсить
 
 сканит только первый файл в директории
+
+cicd-scanner scan tests/fixtures/vulnerable/gitlab_aws.yml --format text
+cicd-scanner scan tests/fixtures/safe/gitlab_vars.yml --format text
