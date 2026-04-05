@@ -28,9 +28,11 @@ class ScannerEngine:
         }
         self.detectors = [
             RegexDetector(),
+            EntropyDetector()
         ]
         self.contextual_detector = ContextualDetector()
         self.scorer = ContextAwareRiskScorer()
+        self.validator_manager = FormatValidatorManager()
 
     def _detect_ci_system(self, file_path: Path) -> str:
         """
@@ -52,6 +54,7 @@ class ScannerEngine:
         #     return 'jenkins'
         else:
             return 'gitlab'  # По умолчанию
+
 
     def scan_file(self, file_path: Path | str) -> ScanResult:
         """
@@ -81,12 +84,19 @@ class ScannerEngine:
                 findings = detector.detect(config, all_values)
                 all_findings.extend(findings)
             
+            # Контекст
             enhanced_findings = self.contextual_detector.apply_context(all_findings)
+
+            # Валидация
+            validated_findings = [
+                self.validator_manager.validate(f) 
+                for f in enhanced_findings
+            ]
 
             duration = (time.time() - start) * 1000
 
             return ScanResult(
-                findings=enhanced_findings,
+                findings=validated_findings, # уже провалидированные файндинги с контекстом
                 files_scanned=1,
                 scan_duration_ms=duration,
                 ci_systems_detected=[ci_system],
