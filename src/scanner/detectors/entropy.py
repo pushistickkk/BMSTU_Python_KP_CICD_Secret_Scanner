@@ -152,6 +152,7 @@ class EntropyDetector(DetectorMixin):
                     context=PipelineContext(**context_dict),
                     risk_score=4.0,  # Ниже чем у известных типов
                     additional_data={"entropy": round(entropy, 2)},
+                    detector_name="EntropyDetector",
                 )
                 findings.append(finding)
         

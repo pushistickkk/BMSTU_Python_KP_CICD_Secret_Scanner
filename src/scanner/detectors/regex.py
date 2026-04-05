@@ -239,6 +239,7 @@ class RegexDetector(DetectorMixin):
                         is_hardcoded=True,
                         context=PipelineContext(**context_dict),
                         risk_score=SECRET_RISK_BASE.get(secret_type, 5.0),
+                        detector_name="RegexDetector",
                     )
                     findings.append(finding)
 

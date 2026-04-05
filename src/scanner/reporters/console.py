@@ -62,6 +62,7 @@ class ConsoleReporter(ReporterMixin):
                 f"[cyan]File:[/cyan] {finding.file}",
                 f"[cyan]Value:[/cyan] [{color}]{finding.redacted_value}[/{color}]",
                 f"[cyan]Risk Score:[/cyan] [{color} bold]{finding.risk_score:.1f}[/bold {color}] ({finding.risk_level.value})",
+                f"[cyan]Detector:[/cyan] {finding.detector_name}",
                 f"[cyan]CI System:[/cyan] {finding.context.ci_system}",
                 f"[cyan]Stage:[/cyan] {finding.context.stage or 'N/A'}",
                 f"[cyan]Environment:[/cyan] {finding.context.environment or 'N/A'}",

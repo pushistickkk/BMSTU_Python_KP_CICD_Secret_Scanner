@@ -83,6 +83,7 @@ class Finding:
     risk_level: RiskLevel = RiskLevel.MEDIUM
     detected_at: datetime = field(default_factory=datetime.now)
     additional_data: Dict[str, Any] = field(default_factory=dict)
+    detector_name: str = "Unknown" 
 
     def to_dict(self) -> dict:
         """Конвертирует в словарь для JSON-сериализации."""
@@ -96,6 +97,7 @@ class Finding:
             "risk_score": round(self.risk_score, 2),
             "risk_level": self.risk_level.value,
             "detected_at": self.detected_at.isoformat(),
+            "detector_name": self.detector_name
         }
 
 
