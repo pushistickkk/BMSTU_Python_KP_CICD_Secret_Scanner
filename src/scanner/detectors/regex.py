@@ -1,6 +1,25 @@
 """
 Regex-детектор секретов.
-Ищет известные паттерны секретов и фильтрует переменные окружения.
+
+Этот модуль предоставляет класс RegexDetector который ищет известные
+паттерны секретов с помощью регулярных выражений и автоматически
+фильтрует переменные окружения.
+
+Модуль содержит:
+- SECRET_PATTERNS: Словарь компилированных регулярных выражений
+- SECRET_RISK_BASE: Базовые веса риска для каждого типа секрета
+- VARIABLE_PATTERNS: Паттерны для распознавания переменных окружения
+- SAFE_VALUES: Список безопасных заглушек
+- Функции is_variable_reference() и redact_value()
+- Класс RegexDetector
+
+Пример использования:
+    >>> from scanner.detectors.regex import RegexDetector
+    >>> detector = RegexDetector()
+    >>> findings = detector.detect(config, values)
+    >>> for f in findings:
+    ...     print(f.secret_type, f.redacted_value)
+    AWS_ACCESS_KEY_ID AKIA***MPLE
 """
 
 import re
@@ -8,9 +27,11 @@ from typing import List, Dict, Any, Tuple
 from scanner.detectors.base import DetectorMixin
 from scanner.core.models import Finding, PipelineContext
 
-# ПАТТЕРНЫ СЕКРЕТОВ - вынести в отдельный файл с правилами для секретов
+# ─────────────────────────────────────────────────────────────────────
+# ПАТТЕРНЫ СЕКРЕТОВ
+# ─────────────────────────────────────────────────────────────────────
 
-SECRET_PATTERNS = {
+SECRET_PATTERNS: Dict[str, re.Pattern] = {
     # AWS Credentials
     "AWS_ACCESS_KEY_ID": re.compile(
         r'(?:A3T[A-Z0-9]|AKIA|ASIA|ABIA|ACCA)[A-Z0-9]{16}',
@@ -77,36 +98,39 @@ SECRET_PATTERNS = {
     ),
 }
 
-# Базовые риски для каждого типа - приблизительно - вынести в отдельный файл с правилами для секретов
-SECRET_RISK_BASE = {
-    "AWS_ACCESS_KEY_ID": 9.0,
-    "AWS_SECRET_ACCESS_KEY": 10.0,
-    "GITHUB_PAT": 8.0,
-    "GITHUB_FINE_GRAINED": 7.0,
-    "GITHUB_OAUTH": 8.0,
-    "GITLAB_PAT": 8.0,
-    "DATABASE_URL": 9.0,
-    "PRIVATE_KEY": 10.0,
-    "SLACK_TOKEN": 5.0,
-    "STRIPE_KEY": 8.0,
-    "SENDGRID_KEY": 6.0,
-    "GENERIC_PASSWORD": 5.0,
-    "GENERIC_TOKEN": 5.0,
+# Базовые риски для каждого типа секретов
+# Эти значения используются как базовый вес в формуле риск-скоринга
+SECRET_RISK_BASE: Dict[str, float] = {
+    "AWS_ACCESS_KEY_ID": 6.0,
+    "AWS_SECRET_ACCESS_KEY": 7.0,
+    "GITHUB_PAT": 5.0,
+    "GITHUB_FINE_GRAINED": 4.0,
+    "GITHUB_OAUTH": 5.0,
+    "GITLAB_PAT": 5.0,
+    "DATABASE_URL": 6.0,
+    "PRIVATE_KEY": 8.0,
+    "SLACK_TOKEN": 3.0,
+    "STRIPE_KEY": 5.0,
+    "SENDGRID_KEY": 4.0,
+    "GENERIC_PASSWORD": 3.0,
+    "GENERIC_TOKEN": 3.0,
 }
 
-# ПАТТЕРНЫ ПЕРЕМЕННЫХ ОКРУЖЕНИЯ
 
-VARIABLE_PATTERNS = [
-    re.compile(r'^\$[A-Z_][A-Z0-9_]*$', re.IGNORECASE),           # $VAR
-    re.compile(r'^\$\{[A-Z_][A-Z0-9_]*\}$', re.IGNORECASE),       # ${VAR}
+# ПАТТЕРНЫ ПЕРЕМЕННЫХ ОКРУЖЕНИЯ (безопасные ссылки)
+
+
+VARIABLE_PATTERNS: List[re.Pattern] = [
+    re.compile(r'^\$[A-Z_][A-Z0-9_]*$', re.IGNORECASE),  # $VAR
+    re.compile(r'^\$\{[A-Z_][A-Z0-9_]*\}$', re.IGNORECASE),  # ${VAR}
     re.compile(r'^\$\{\{\s*secrets\.[A-Z_0-9]+\s*\}\}$', re.IGNORECASE),  # ${{ secrets.* }}
-    re.compile(r'^\$\{\{\s*env\.[A-Z_0-9]+\s*\}\}$', re.IGNORECASE),      # ${{ env.* }}
-    re.compile(r'^\$\{\{\s*github\.[a-z_]+\s*\}\}$', re.IGNORECASE),      # ${{ github.* }}
-    re.compile(r'^\$CI_[A-Z_]+$', re.IGNORECASE),                 # $CI_*
+    re.compile(r'^\$\{\{\s*env\.[A-Z_0-9]+\s*\}\}$', re.IGNORECASE),  # ${{ env.* }}
+    re.compile(r'^\$\{\{\s*github\.[a-z_]+\s*\}\}$', re.IGNORECASE),  # ${{ github.* }}
+    re.compile(r'^\$CI_[A-Z_]+$', re.IGNORECASE),  # $CI_*
 ]
 
-# Явные безопасные значения
-SAFE_VALUES = [
+# Явные безопасные значения (заглушки)
+SAFE_VALUES: List[str] = [
     'null', 'none', 'false', 'true', '',
     'changeme', 'placeholder', 'xxx', 'yyy',
     'your_', 'example', 'test', 'demo'
@@ -115,10 +139,35 @@ SAFE_VALUES = [
 
 def is_variable_reference(value: str) -> bool:
     """
-    Проверяет, является ли значение ссылкой на переменную окружения. - по $
+    Проверяет, является ли значение ссылкой на переменную окружения.
+
+    Переменные окружения считаются безопасными и не детектируются как секреты.
+    Поддерживаемые форматы:
+    - $VAR (GitLab/GitHub)
+    - ${VAR} (GitLab)
+    - ${{ secrets.* }} (GitHub Actions)
+    - ${{ env.* }} (GitHub Actions)
+    - ${{ github.* }} (GitHub Actions)
+    - $CI_* (GitLab built-in variables)
+
+    Также фильтруются явные заглушки: null, none, false, true, changeme, etc.
+
+    Args:
+        value (str): Значение для проверки
 
     Returns:
-        True если это переменная (безопасно), False если хардкод
+        bool: True если это переменная окружения или заглушка (безопасно),
+              False если это потенциальный хардкод секрета
+
+    Example:
+        >>> is_variable_reference("$AWS_KEY")
+        True
+        >>> is_variable_reference("${{ secrets.TOKEN }}")
+        True
+        >>> is_variable_reference("AKIAIOSFODNN7EXAMPLE")
+        False
+        >>> is_variable_reference("changeme")
+        True
     """
     if not isinstance(value, str):
         return False
@@ -129,7 +178,7 @@ def is_variable_reference(value: str) -> bool:
     if not value:
         return True
 
-    # Явные заглушки (точное совпадение, не подстрока!)
+    # Явные заглушки (ТОЛЬКО точное совпадение, не подстрока!)
     safe_exact = {'null', 'none', 'false', 'true', '', 'changeme', 'placeholder'}
     if value.lower() in safe_exact:
         return True
@@ -144,7 +193,7 @@ def is_variable_reference(value: str) -> bool:
         r'^\$CI_[A-Z_]+$',  # $CI_*
     ]
 
-    for pattern in variable_patterns: # фильтрация FP
+    for pattern in variable_patterns:
         if re.match(pattern, value, re.IGNORECASE):
             return True
 
@@ -153,14 +202,29 @@ def is_variable_reference(value: str) -> bool:
 
 def redact_value(value: str, visible_chars: int = 4) -> str:
     """
-    Маскирует значение секрета для безопасного вывода, чтобы в секреты не утекли в логи.
+    Маскирует значение секрета для безопасного вывода.
+
+    Используется для предотвращения утечки реальных секретов в логи и отчёты.
+    Сохраняет первые и последние visible_chars символов для идентификации.
+
+    Алгоритм:
+    - Если длина <= visible_chars * 2: возвращает строку из '*'
+    - Иначе: первые visible_chars + '*' * (длина - 2*visible_chars) + последние visible_chars
 
     Args:
-        value: Оригинальное значение
-        visible_chars: Количество видимых символов с каждой стороны
+        value (str): Оригинальное значение секрета
+        visible_chars (int): Количество видимых символов с каждой стороны (по умолчанию 4)
 
     Returns:
-        Замаскированное значение
+        str: Замаскированное значение
+
+    Example:
+        >>> redact_value("AKIAIOSFODNN7EXAMPLE")
+        'AKIA************MPLE'
+        >>> redact_value("short", visible_chars=2)
+        '*****'
+        >>> redact_value("abcdefgh", visible_chars=2)
+        'ab****gh'
     """
     if len(value) <= visible_chars * 2:
         return '*' * len(value)
@@ -171,8 +235,28 @@ class RegexDetector(DetectorMixin):
     """
     Детектор секретов на основе регулярных выражений.
 
-    Ищет известные паттерны секретов и автоматически
-    фильтрует переменные окружения.
+    Ищет известные паттерны секретов и автоматически фильтрует переменные окружения.
+
+    Алгоритм работы:
+    1. Проходит по всем строковым значениям из конфигурации
+    2. Пропускает не-строки и значения короче min_length
+    3. Фильтрует переменные окружения через is_variable_reference()
+    4. Проверяет каждое значение против SECRET_PATTERNS
+    5. При совпадении создаёт Finding с соответствующим secret_type
+
+    Особые случаи:
+    - DATABASE_URL: Извлекает только пароль из строки подключения
+    - GENERIC_PASSWORD/GENERIC_TOKEN: Извлекает значение из группы захвата
+
+    Attributes:
+        min_length (int): Минимальная длина значения для проверки
+
+    Example:
+        >>> detector = RegexDetector(min_length=10)
+        >>> findings = detector.detect(config, values)
+        >>> for f in findings:
+        ...     print(f.secret_type, f.redacted_value)
+        AWS_ACCESS_KEY_ID AKIA***MPLE
     """
 
     def __init__(self, min_length: int = 8):
@@ -180,12 +264,23 @@ class RegexDetector(DetectorMixin):
         Инициализирует детектор.
 
         Args:
-            min_length: Минимальная длина значения для проверки
+            min_length (int): Минимальная длина значения для проверки.
+                             Значения короче игнорируются для снижения ложных срабатываний.
+
+        Example:
+            >>> detector = RegexDetector(min_length=12)
+            >>> print(detector.min_length)
+            12
         """
         self.min_length = min_length
 
     def get_priority(self) -> int:
-        """Высокий приоритет — выполняется первым."""
+        """
+        Возвращает приоритет выполнения детектора.
+
+        Returns:
+            int: 1 (высокий приоритет — выполняется первым)
+        """
         return 1
 
     def detect(
@@ -196,12 +291,34 @@ class RegexDetector(DetectorMixin):
         """
         Ищет секреты в предоставленных значениях.
 
+        Алгоритм:
+        1. Проходит по всем кортежам (key_path, value, context_dict)
+        2. Пропускает не-строки и значения короче min_length
+        3. Фильтрует переменные окружения (ключевая проверка!)
+        4. Проверяет каждое значение против всех SECRET_PATTERNS
+        5. При совпадении создаёт Finding с соответствующим secret_type
+
+        Особые случаи обработки:
+        - DATABASE_URL: Извлекает только пароль из группы захвата
+        - GENERIC_PASSWORD/GENERIC_TOKEN: Извлекает значение из группы захвата
+
         Args:
-            config: Распарсенная конфигурация (GitLabCIConfig)
-            all_values: Список (key_path, value, context_dict)
+            config: Распарсенная конфигурация (используется для file_path)
+            all_values (List[tuple]): Список кортежей (key_path, value, context_dict)
+                                     где context_dict содержит метаданные (stage, env, etc.)
 
         Returns:
-            Список объектов Finding
+            List[Finding]: Список найденных уязвимостей
+
+        Example:
+            >>> detector = RegexDetector()
+            >>> findings = detector.detect(config, values)
+            >>> print(f"Found {len(findings)} secrets")
+            Found 2 secrets
+            >>> for f in findings:
+            ...     print(f.secret_type, f.line)
+            AWS_ACCESS_KEY_ID 10
+            AWS_SECRET_ACCESS_KEY 11
         """
         findings = []
 
@@ -221,17 +338,18 @@ class RegexDetector(DetectorMixin):
                     # Извлекаем найденное значение
                     matched_value = match.group(0)
 
-                    # Для DATABASE_URL извлекаем пароль из группы
+                    # Для DATABASE_URL извлекаем пароль из группы захвата
                     if secret_type == "DATABASE_URL" and match.groups():
                         matched_value = f"password={match.group(1)}"
 
-                    # Для GENERIC_* извлекаем значение из группы
+                    # Для GENERIC_* извлекаем значение из группы захвата
                     if secret_type in ["GENERIC_PASSWORD", "GENERIC_TOKEN"] and match.groups():
                         matched_value = match.group(1)
 
-                    # Создаём Finding
-                    line_num = context_dict.pop('line', 0)  # pop удаляет из dict
+                    # Извлекаем номер строки из context_dict (pop удаляет ключ)
+                    line_num = context_dict.pop('line', 0)
 
+                    # Создаём Finding
                     finding = Finding(
                         file=config.file_path,
                         line=line_num,  # Передаём напрямую в Finding
@@ -239,7 +357,7 @@ class RegexDetector(DetectorMixin):
                         value=matched_value,
                         redacted_value=redact_value(matched_value),
                         is_hardcoded=True,
-                        context=PipelineContext(**context_dict), 
+                        context=PipelineContext(**context_dict),  # Оставшиеся поля контекста
                         risk_score=SECRET_RISK_BASE.get(secret_type, 5.0),
                         detector_name="RegexDetector",
                     )
