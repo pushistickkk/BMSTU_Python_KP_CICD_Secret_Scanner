@@ -47,3 +47,5 @@ Thumbs.db
 cicd_secret_scanner.egg-info
 .pytest_cache
 .idea
+
+reports

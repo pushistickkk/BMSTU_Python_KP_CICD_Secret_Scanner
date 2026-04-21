@@ -19,19 +19,19 @@ class ContextAwareRiskScorer:
     
     # Базовые веса для типов секретов
     SECRET_TYPE_WEIGHTS = {
-        "AWS_ACCESS_KEY_ID": 9.0,
-        "AWS_SECRET_ACCESS_KEY": 10.0,
-        "GITHUB_PAT": 8.0,
-        "GITHUB_FINE_GRAINED": 7.0,
-        "GITHUB_OAUTH": 8.0,
-        "GITLAB_PAT": 8.0,
-        "DATABASE_URL": 9.0,
-        "PRIVATE_KEY": 10.0,
-        "SLACK_TOKEN": 5.0,
-        "STRIPE_KEY": 8.0,
-        "SENDGRID_KEY": 6.0,
-        "GENERIC_PASSWORD": 5.0,
-        "GENERIC_TOKEN": 5.0,
+        "AWS_ACCESS_KEY_ID": 6.0,       # Было 9.0
+        "AWS_SECRET_ACCESS_KEY": 7.0,   # Было 10.0
+        "GITHUB_PAT": 5.0,              # Было 8.0
+        "GITHUB_FINE_GRAINED": 4.0,     # Было 7.0
+        "GITHUB_OAUTH": 5.0,            # Было 8.0
+        "GITLAB_PAT": 5.0,              # Было 8.0
+        "DATABASE_URL": 6.0,            # Было 9.0
+        "PRIVATE_KEY": 8.0,             # Было 10.0
+        "SLACK_TOKEN": 3.0,             # Было 5.0
+        "STRIPE_KEY": 5.0,              # Было 8.0
+        "SENDGRID_KEY": 4.0,            # Было 6.0
+        "GENERIC_PASSWORD": 3.0,        # Было 5.0
+        "GENERIC_TOKEN": 3.0,           # Было 5.0
     }
     
     # Множители для этапов пайплайна

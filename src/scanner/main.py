@@ -13,6 +13,9 @@ from scanner.core.engine import ScannerEngine
 from scanner.core.models import RiskLevel
 from scanner.reporters.console import ConsoleReporter
 from scanner.reporters.json import JSONReporter
+from scanner.reporters.sarif import SARIFReporter
+
+from datetime import datetime
 
 console = Console()
 
@@ -22,34 +25,39 @@ console = Console()
 def cli():
     """
     CI/CD Secret Scanner — контекстный сканер секретов для конфигураций CI/CD.
-    Поддерживает конфиги GitLab CI (пока что).
     """
     pass
 
 
 @cli.command()
 @click.argument(
-    'path',
+    'path', 
     type=click.Path(exists=True),
     required=True
 )
 @click.option(
     '--format', '-f',
-    type=click.Choice(['text', 'json']),
+    type=click.Choice(['text', 'json', 'sarif']),
     default='text',
-    help='Формат вывода результатов: text, json'
+    help='Формат вывода результатов'
 )
 @click.option(
     '--output', '-o',
     type=click.Path(),
     default=None,
-    help='Путь для сохранения отчёта'
+    help='Путь для сохранения отчёта (по умолчанию: results/<timestamp>.<format>)'
+)
+@click.option(
+    '--output-dir',
+    type=click.Path(),
+    default='results',
+    help='Директория для сохранения отчётов (по умолчанию: results/)'
 )
 @click.option(
     '--risk-threshold',
     type=click.Choice(['low', 'medium', 'high', 'critical']),
     default='medium',
-    help='Минимальный уровень риска для вывода - по умолчанию Medium'
+    help='Минимальный уровень риска для вывода'
 )
 @click.option(
     '--fail-on',
@@ -57,53 +65,68 @@ def cli():
     default='none',
     help='Код возврата при обнаружении уязвимостей'
 )
-
-
-def scan(path, format, output, risk_threshold, fail_on):
+def scan(path, format, output, output_dir, risk_threshold, fail_on):
     """
     Сканировать файл или директорию на наличие секретов.
-
+    
     PATH: Путь к файлу или директории с CI/CD конфигурациями
     """
     path = Path(path)
-
+    
+    #  Создаём директорию для результатов
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    #  Если output не указан, генерируем имя файла с timestamp
+    if not output:
+        from datetime import datetime
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        scan_target = path.name.replace('.', '_')
+        output = output_dir / f"{scan_target}_{timestamp}.{format}"
+    else:
+        output = Path(output)
+        if not output.parent.name or output.parent == Path('.'):
+            output = output_dir / output.name
+    
     console.print(Panel.fit(
-        f"Scanning: [bold cyan]{path}[/bold cyan]",
+        f" Scanning: [bold cyan]{path}[/bold cyan]",
         title="CI/CD Secret Scanner",
         border_style="blue"
     ))
-
+    
     start_time = time.time()
-
+    
     # Инициализация движка
     engine = ScannerEngine()
-
+    
     # Сканирование
     if path.is_file():
+        console.print(f"[dim]Mode: Single file scan[/dim]\n")
         result = engine.scan_file(path)
     elif path.is_dir():
+        console.print(f"[dim]Mode: Directory scan (recursive)[/dim]\n")
         result = engine.scan_directory(path)
     else:
         console.print("[red] Invalid path![/red]")
         return
-
+    
     duration = time.time() - start_time
-
-    # Вывод результатов
+    
+    # Выбор репортёра
     if format == 'json':
         reporter = JSONReporter()
+    elif format == 'sarif':
+        reporter = SARIFReporter()
     else:
         reporter = ConsoleReporter()
-
+    
+    #  Генерируем и сохраняем отчёт
     report = reporter.report(result, output)
-
-    # Печать отчёта
-    if not output:
-        console.print(report)
-
-    # Итоговая статистика
+    
+    #  Вывод в консоль
+    console.print(f"\n[green] Report saved to: {output}[/green]\n")
     _print_summary(result, duration)
-
+    
     # Код возврата
     if fail_on != 'none':
         if fail_on == 'critical' and result.has_critical:

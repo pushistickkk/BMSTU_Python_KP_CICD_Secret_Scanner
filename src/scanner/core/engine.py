@@ -135,12 +135,7 @@ class ScannerEngine:
     def scan_directory(self, dir_path: Path | str) -> ScanResult:
         """
         Сканирует директорию рекурсивно.
-
-        Args:
-            dir_path: Путь к директории
-
-        Returns:
-            ScanResult с результатами
+        Находит все CI/CD конфигурационные файлы.
         """
         dir_path = Path(dir_path)
         all_findings = []
@@ -148,27 +143,62 @@ class ScannerEngine:
         ci_systems = set()
         errors = []
         start = time.time()
-
-        # Паттерны для поиска
+        
+        # Расширенные паттерны для поиска CI/CD файлов
         patterns = [
             '**/.gitlab-ci.yml',
             '**/.gitlab/ci/*.yml',
-            # '**/.github/workflows/*.yml',
-            # '**/.github/workflows/*.yaml',
+            '**/.gitlab/ci/*.yaml',
+            '**/.github/workflows/*.yml',
+            '**/.github/workflows/*.yaml',
+            '**/github/workflows/*.yml',
+            '**/github/workflows/*.yaml',
+            '**/github_workflows.yml',
+            '**/github_workflows.yaml',
+            '**/github_*.yaml',
+            '**/github_*.yml',
+            '**/gitlab_*.yaml',
+            '**/gitlab_*.yml',
             # '**/Jenkinsfile',
+            # '**/Jenkinsfile.*',
             # '**/*.jenkinsfile',
+            # '**/*.jenkins',
         ]
-
+        
+        # Собираем все файлы (используем set для уникальности)
+        found_files = set()
+        
         for pattern in patterns:
             for file in dir_path.glob(pattern):
+                if file.is_file():
+                    found_files.add(file)
+        
+        # Дополнительно: ищем по имени файла (если паттерны не сработали)
+        for file in dir_path.rglob('*'):
+            if file.is_file():
+                file_name = file.name.lower()
+                if any([
+                    'gitlab-ci' in file_name,
+                    file_name.endswith('.gitlab-ci.yml'),
+                    '.github/workflows/' in str(file).lower(),
+                    'jenkinsfile' in file_name,
+                    file_name.endswith('.jenkinsfile'),
+                ]):
+                    found_files.add(file)
+        
+        # Сканируем каждый найденный файл
+        for file in sorted(found_files):
+            try:
                 result = self.scan_file(file)
                 all_findings.extend(result.findings)
                 files_scanned += 1
                 ci_systems.update(result.ci_systems_detected)
                 errors.extend(result.errors)
-
+            except Exception as e:
+                errors.append(f"Error scanning {file}: {str(e)}")
+        
         duration = (time.time() - start) * 1000
-
+        
         return ScanResult(
             findings=all_findings,
             files_scanned=files_scanned,

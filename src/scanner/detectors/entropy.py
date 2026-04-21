@@ -142,15 +142,17 @@ class EntropyDetector(DetectorMixin):
             if self.is_high_entropy(value):
                 entropy = self.calculate_entropy(value)
                 
+                line_num = context_dict.pop('line', 0)
+
                 finding = Finding(
                     file=config.file_path,
-                    line=0,
+                    line=line_num,  # Прямо в Finding
                     secret_type="HIGH_ENTROPY_STRING",
                     value=value,
                     redacted_value=value[:4] + '*' * (len(value) - 8) + value[-4:],
                     is_hardcoded=True,
                     context=PipelineContext(**context_dict),
-                    risk_score=4.0,  # Ниже чем у известных типов
+                    risk_score=4.0,
                     additional_data={"entropy": round(entropy, 2)},
                     detector_name="EntropyDetector",
                 )

@@ -230,14 +230,16 @@ class RegexDetector(DetectorMixin):
                         matched_value = match.group(1)
 
                     # Создаём Finding
+                    line_num = context_dict.pop('line', 0)  # pop удаляет из dict
+
                     finding = Finding(
                         file=config.file_path,
-                        line=0,  # нужно добавить определение номера строки
+                        line=line_num,  # Передаём напрямую в Finding
                         secret_type=secret_type,
                         value=matched_value,
                         redacted_value=redact_value(matched_value),
                         is_hardcoded=True,
-                        context=PipelineContext(**context_dict),
+                        context=PipelineContext(**context_dict), 
                         risk_score=SECRET_RISK_BASE.get(secret_type, 5.0),
                         detector_name="RegexDetector",
                     )

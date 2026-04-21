@@ -199,3 +199,115 @@ class GitLabParser(ParserMixin):
                     ))
 
         return results
+    
+    def _find_line_number(self, file_path: str, search_key: str, search_value: str) -> int:
+        """
+        Ищет номер строки с ключом и значением в файле.
+        
+        Args:
+            file_path: Путь к файлу
+            search_key: Ключ для поиска (например, AWS_ACCESS_KEY_ID)
+            search_value: Значение для поиска
+            
+        Returns:
+            int: Номер строки (1-based) или 0 если не найдено
+        """
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                for line_num, line in enumerate(f, 1):
+                    if search_key in line and search_value[:10] in line:
+                        return line_num
+        except:
+            pass
+        return 0
+    
+    def get_all_values_with_context(
+        self, 
+        config: GitLabCIConfig
+    ) -> List[Tuple[str, str, Dict[str, Any]]]:
+        """Извлекает все строковые значения с контекстом."""
+        results = []
+        
+        # 1. Глобальные переменные
+        for var_name, var_value in config.global_vars.items():
+            if isinstance(var_value, str):
+                line_num = self._find_line_number(config.file_path, var_name, var_value)
+                results.append((
+                    f"variables.{var_name}",
+                    var_value,
+                    {
+                        "ci_system": "gitlab",
+                        "section": "global_variables",
+                        "variable_name": var_name,
+                        "stage": "",
+                        "job_name": "",
+                        "environment": "",
+                        "is_production": False,
+                        "line": line_num,  # Добавляем номер строки
+                    }
+                ))
+        
+        # 2. Джобы и их настройки
+        for job_name, job_data in config.jobs.items():
+            if not isinstance(job_data, dict):
+                continue
+            
+            job_stage = job_data.get('stage', 'default')
+            
+            env_config = job_data.get('environment', {})
+            if isinstance(env_config, str):
+                environment = env_config
+            elif isinstance(env_config, dict):
+                environment = env_config.get('name', '')
+            else:
+                environment = ''
+            
+            is_production = any(
+                kw in environment.lower() 
+                for kw in ['prod', 'production', 'main', 'master']
+            )
+            
+            # Переменные джоба
+            job_vars = job_data.get('variables', {})
+            if isinstance(job_vars, dict):
+                for var_name, var_value in job_vars.items():
+                    if isinstance(var_value, str):
+                        line_num = self._find_line_number(config.file_path, var_name, var_value)
+                        results.append((
+                            f"jobs.{job_name}.variables.{var_name}",
+                            var_value,
+                            {
+                                "ci_system": "gitlab",
+                                "section": "job_variables",
+                                "variable_name": var_name,
+                                "stage": str(job_stage),
+                                "job_name": job_name,
+                                "environment": environment,
+                                "is_production": is_production,
+                                "line": line_num,  # Добавляем номер строки
+                            }
+                        ))
+            
+            # Скрипты
+            scripts = job_data.get('script', [])
+            if isinstance(scripts, list):
+                for i, script_line in enumerate(scripts):
+                    if isinstance(script_line, str):
+                        # Для скриптов ищем по содержимому
+                        line_num = self._find_line_number(config.file_path, '', script_line[:30])
+                        results.append((
+                            f"jobs.{job_name}.script[{i}]",
+                            script_line,
+                            {
+                                "ci_system": "gitlab",
+                                "section": "script",
+                                "stage": str(job_stage),
+                                "job_name": job_name,
+                                "environment": environment,
+                                "is_production": is_production,
+                                "script_content": script_line,
+                                "line": line_num,  # Добавляем номер строки
+                            }
+                        ))
+        
+        return results
